@@ -13,6 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-go@v5
         with:
@@ -21,15 +23,50 @@ jobs:
       - name: Install pack-plugin
         run: go install github.com/looplj/axonhub/cmd/pack-plugin@unstable
 
+      - name: Set manifest version from tag
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          python3 - "$version" <<'PY'
+          import re
+          import sys
+          from pathlib import Path
+
+          version = sys.argv[1]
+          if not re.fullmatch(r"\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?", version):
+              raise SystemExit(f"ref name is not a semantic version: {version}")
+          path = Path("manifest.json")
+          text = path.read_text()
+          new, count = re.subn(
+              r'("version"\s*:\s*")[^"]*"',
+              lambda match: f'{match.group(1)}{version}"',
+              text,
+              count=1,
+          )
+          if count != 1:
+              raise SystemExit("manifest.json has no version field")
+          path.write_text(new)
+          print(f"manifest version set to {version}")
+          PY
+          git add manifest.json
+
+      - name: Commit manifest version
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --cached --quiet; then
+            echo "manifest version already matches the tag"
+          else
+            git commit -m "chore: update manifest version to ${GITHUB_REF_NAME#v} [skip ci]"
+            git push origin "HEAD:${{ github.event.repository.default_branch }}"
+          fi
+
       - name: Pack
         run: |
           set -euo pipefail
           version="${GITHUB_REF_NAME#v}"
-          manifest_version="$(python3 -c 'import json; print(json.load(open("manifest.json"))["version"])')"
-          if [ "$version" != "$manifest_version" ]; then
-            echo "tag v${version} does not match manifest version ${manifest_version}" >&2
-            exit 1
-          fi
           stage="${RUNNER_TEMP}/plugin"
           mkdir -p "$stage"
           cp manifest.json plugin.js "$stage/"

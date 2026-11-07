@@ -61,7 +61,7 @@ cp -R lib ui "$stage/"
 pack-plugin "$stage" -o "$PWD/jev-guard-$(python3 -c 'import json; print(json.load(open("manifest.json"))["version"])').axplugin"
 ```
 
-在 GitHub 上发布 `v<manifest.version>` 时会推送同名标签，`.github/workflows/release.yml` 做同样的打包，并把 `.axplugin` 和 sha256 挂到这个已有 Release 上。只有标签存在但还没有 Release 时，工作流才会新建一个。市场索引不在这个流程里。
+在 GitHub 上发布 `v*` 标签时，`.github/workflows/release.yml` 把 `manifest.json` 的 `version` 写成标签版本并推回默认分支，然后做同样的打包，把 `.axplugin` 和 sha256 挂到已有 Release 上。只有标签存在但还没有 Release 时，工作流才会新建一个。市场索引不在这个流程里。
 
 决策逻辑的本地测试不在打包复制的文件里：
 
