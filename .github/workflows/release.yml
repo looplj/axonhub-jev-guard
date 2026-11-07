@@ -1,0 +1,59 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27.3"
+
+      - name: Install pack-plugin
+        run: go install github.com/looplj/axonhub/cmd/pack-plugin@unstable
+
+      - name: Pack
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          manifest_version="$(python3 -c 'import json; print(json.load(open("manifest.json"))["version"])')"
+          if [ "$version" != "$manifest_version" ]; then
+            echo "tag v${version} does not match manifest version ${manifest_version}" >&2
+            exit 1
+          fi
+          stage="${RUNNER_TEMP}/plugin"
+          mkdir -p "$stage"
+          cp manifest.json plugin.js "$stage/"
+          cp -R lib ui "$stage/"
+          asset="${RUNNER_TEMP}/jev-guard-${version}.axplugin"
+          pack-plugin "$stage" -o "$asset"
+          sha256sum "$asset" | tee "${RUNNER_TEMP}/checksums.txt"
+          echo "ASSET=${asset}" >> "$GITHUB_ENV"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          notes="${RUNNER_TEMP}/notes.md"
+          {
+            echo "Jev Guard ${GITHUB_REF_NAME}"
+            echo
+            echo '```'
+            cat "${RUNNER_TEMP}/checksums.txt"
+            echo '```'
+          } > "$notes"
+          gh release create "$GITHUB_REF_NAME" \
+            "$ASSET" \
+            "${RUNNER_TEMP}/checksums.txt" \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file "$notes"
