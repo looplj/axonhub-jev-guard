@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "local.jev-guard",
   "name": "Jev 请求审查",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "在请求进入上游模型之前，用 Jev 判断一组可配置的分类。任一分类达到拦截阈值时返回 403，并写入拦截记录。低于阈值的请求继续，不落库。",
   "axonhubVersion": "^1.0.0",
   "pluginApiVersion": 1,
